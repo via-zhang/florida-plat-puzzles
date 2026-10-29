@@ -1,0 +1,25 @@
+# Private source imagery: never commit
+source/
+*.jpg
+*.jpeg
+*.tif
+*.tiff
+_preview/
+Claude outputs/
+
+# Node / build
+node_modules/
+dist/
+.vite/
+playwright-report/
+test-results/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
