@@ -178,6 +178,6 @@
     .group :global(.choice) { flex: 1 1 260px; }
     .sel { flex-direction: row; align-items: center; }
     .thumb { width: 88px; }
-    .map-wrap { flex: none; height: 62dvh; min-height: 320px; }
+    .map-wrap { flex: none; height: 62svh; min-height: 320px; }
   }
 </style>

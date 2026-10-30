@@ -4,7 +4,7 @@
   import { jigsawTabs, type Difficulty } from '../lib/engine/difficulty';
   import * as J from '../lib/engine/jigsaw';
   import { createRng } from '../lib/engine/rng';
-  import { createMover, grabbedAt, liftOffset, offsetFor, startLift, type Lift, type Pt } from '../lib/lift';
+  import { createMover, grabbedAt, offsetFor, startLift, type Lift, type Pt } from '../lib/lift';
   import { svgPoint } from '../lib/panzoom';
   import { blankCells, type LoadedPuzzle } from '../lib/puzzle';
   import { click, tick } from '../lib/sound';
@@ -67,7 +67,7 @@
   let hoverCell = $state<number | null>(null);
   let layer = $state<HTMLDivElement>();
   let layerInner = $state<HTMLDivElement>();
-  const mover = createMover(() => svg, () => layer, () => layerInner);
+  const mover = createMover(() => layer, () => layerInner);
   const home = (p: J.Piece) => ({ x: p.col * cell, y: p.row * cell });
   const onBoard = (pt: Pt) => pt.x >= 0 && pt.y >= 0 && pt.x <= B && pt.y <= B;
   const inTray = (pt: Pt) => {
@@ -90,7 +90,8 @@
     const local = { x: h.x + (pt.x - h.x - p.dx) / k, y: h.y + (pt.y - h.y - p.dy) / k };
     liftFrom = { dx: p.dx, dy: p.dy, small: p.small };
     game = J.raise(game, id);
-    lift = startLift(svg, wrap, e, id, local, k);
+    const bounds = (e.currentTarget as SVGGElement).querySelector('path')!.getBBox();
+    lift = startLift(svg, wrap, e, id, local, k, bounds);
     let scale = k;
     mover.begin(lift, (at) => {
       scale = scaleAt(at, scale);
@@ -106,7 +107,7 @@
   function release(e: PointerEvent) {
     if (!lift || settling || !liftFrom) return;
     const l = lift, id = l.id, from = liftFrom;
-    const pt = svgPoint(svg, e.clientX, e.clientY);
+    const pt = l.toBoard(e.clientX, e.clientY);
     const k = scaleAt(pt, mover.end());
     const p = game.pieces[id], h = home(p);
     game = { ...game, pieces: game.pieces.map((q) => (q.id === id ? { ...q, ...offsetFor(l, h, pt, k), small: k !== 1 } : q)) };
@@ -114,7 +115,7 @@
     place(id, from);
     const q = game.pieces[id], kf = q.small ? game.trayScale : 1;
     settling = true;
-    mover.settle(grabbedAt(l, h, q.dx, q.dy, kf), kf, finishSettle);
+    mover.settle(svg, grabbedAt(l, h, q.dx, q.dy, kf), kf, finishSettle);
   }
   function finishSettle() {
     settling = false;
@@ -183,9 +184,6 @@
         <line x1="0" y1={v} x2={B} y2={v} />
       {/each}
     </g>
-    {#if hoverCell !== null}
-      <rect class="target" x={(hoverCell % n) * cell} y={Math.floor(hoverCell / n) * cell} width={cell} height={cell} />
-    {/if}
     {#if landscape}
       <rect class="tray" x={B + GAP / 2} y="0" width={TRAY + GAP / 2} height={B} rx="16" />
     {:else}
@@ -212,22 +210,26 @@
       >
         <path d={p.path} fill="url(#{uid}-paper)" />
         <path d={p.path} fill="url(#{uid}-img{srcs.indexOf(srcOf(id))})" class="face" />
+        <!-- The whole cell counts as the piece, including the notches cut into it. -->
+        <rect class="hit" x={p.col * cell} y={p.row * cell} width={cell} height={cell} />
       </g>
     {/each}
   </svg>
   {#if lift}
     {@const p = game.pieces[lift.id]}
-    {@const o = liftOffset(lift)}
+    {#if hoverCell !== null}
+      <svg class="target-layer" aria-hidden="true" viewBox={lift.frameViewBox} preserveAspectRatio="xMidYMid meet"
+           style:left="{lift.frame.left}px" style:top="{lift.frame.top}px" style:width="{lift.frame.width}px" style:height="{lift.frame.height}px">
+        <rect class="target" x={(hoverCell % n) * cell} y={Math.floor(hoverCell / n) * cell} width={cell} height={cell} />
+      </svg>
+    {/if}
     <div class="lift" bind:this={layer} aria-hidden="true"
          style:left="{lift.box.left}px" style:top="{lift.box.top}px" style:width="{lift.box.width}px" style:height="{lift.box.height}px">
       <div class="lift-inner" bind:this={layerInner}
-           style:transform-origin="{lift.origin.x}px {lift.origin.y}px"
-           style:transform="scale({lift.scale})">
-        <svg viewBox={lift.viewBox} preserveAspectRatio="xMidYMid meet">
-          <g transform="translate({o.x} {o.y})">
-            <path d={p.path} fill="url(#{uid}-paper)" />
-            <path d={p.path} fill="url(#{uid}-img{srcs.indexOf(srcOf(lift.id))})" class="face" />
-          </g>
+           style:transform-origin="{lift.origin.x}px {lift.origin.y}px" style:transform="scale({lift.scale})">
+        <svg viewBox={lift.viewBox}>
+          <path d={p.path} fill="url(#{uid}-paper)" />
+          <path d={p.path} fill="url(#{uid}-img{srcs.indexOf(srcOf(lift.id))})" class="face" />
         </svg>
       </div>
     </div>
@@ -243,7 +245,9 @@
   .tray { fill: var(--surface-2); stroke: var(--line); stroke-width: 2; stroke-dasharray: 10 8; }
   .piece { cursor: grab; outline: none; }
   .piece.lifted { opacity: 0; }
-  .lift { position: absolute; z-index: 1; pointer-events: none; will-change: transform; }
+  .target-layer { position: absolute; z-index: 1; pointer-events: none; overflow: visible; }
+  .hit { fill: transparent; }
+  .lift { position: absolute; z-index: 2; pointer-events: none; will-change: transform; }
   .lift-inner { width: 100%; height: 100%; will-change: transform; transition: transform 0.18s ease-out; filter: drop-shadow(2px 4px 4px rgb(0 0 0 / 0.4)); }
   .lift svg { display: block; width: 100%; height: 100%; overflow: visible; }
   .piece.locked, .solved .piece { cursor: default; }

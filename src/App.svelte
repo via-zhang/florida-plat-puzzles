@@ -107,6 +107,6 @@
 <About bind:open={aboutOpen} />
 
 <style>
-  .shell { flex: 1; display: flex; flex-direction: column; min-height: 100dvh; }
+  .shell { flex: 1; display: flex; flex-direction: column; min-height: 100svh; }
   .msg { text-align: center; margin-top: 20vh; color: var(--muted); }
 </style>

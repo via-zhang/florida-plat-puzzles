@@ -37,7 +37,7 @@
 
   /* Phones: stack the controls above the content, credit at the very bottom. */
   @media (max-width: 760px) {
-    .page { grid-template-columns: 1fr; height: auto; min-height: 100dvh; gap: 12px; padding: max(10px, env(safe-area-inset-top)) 12px 12px; }
+    .page { grid-template-columns: 1fr; height: auto; min-height: 100svh; gap: 12px; padding: max(10px, env(safe-area-inset-top)) 12px 12px; }
     .side { overflow: visible; gap: 0.6rem; container-type: normal; }
     .credit-side { display: none; }
     .credit-bottom { display: block; text-align: center; }

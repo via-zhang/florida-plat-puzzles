@@ -426,3 +426,39 @@ test('phone: reference image spans the panel width', async ({ page }) => {
   const box = (await page.locator('.ref-body img, .ref-body .cmp-wrap').first().boundingBox())!;
   expect(box.width).toBeGreaterThan(Math.min(w - 60, 480));
 });
+
+test('jigsaw: tapping a notch cut into a piece still picks up that piece', async ({ page }) => {
+  await page.goto(`./#/play/${SQUARE}/jigsaw/medium`);
+  await waitForBoard(page);
+  await page.waitForSelector('g.piece');
+  await page.evaluate(() => document.querySelector('svg.jigsaw')!.scrollIntoView({ block: 'end' }));
+  const r = await page.evaluate(() => {
+    let tried = 0, hit = 0;
+    for (const g of document.querySelectorAll<SVGGElement>('g.piece:not(.locked)')) {
+      const path = g.querySelector('path')!, bb = g.querySelector<SVGRectElement>('rect.hit')!.getBBox(), m = g.getScreenCTM()!;
+      for (let i = 1; i < 10; i++) for (let j = 1; j < 10; j++) {
+        const x = bb.x + (bb.width * i) / 10, y = bb.y + (bb.height * j) / 10;
+        if (path.isPointInFill(new DOMPoint(x, y))) continue;
+        const sp = new DOMPoint(x, y).matrixTransform(m);
+        if (sp.y < 0 || sp.y > innerHeight) continue;
+        tried++;
+        if (document.elementFromPoint(sp.x, sp.y)?.closest('g.piece') === g) hit++;
+      }
+    }
+    return { tried, hit };
+  });
+  expect(r.tried).toBeGreaterThan(5);
+  expect(r.hit).toBe(r.tried);
+});
+
+test('phone: the puzzle leaves page margins on both sides for scrolling', async ({ page }) => {
+  const w = page.viewportSize()!.width;
+  test.skip(w > 760, 'phone layout only');
+  for (const mode of ['jigsaw', 'survey']) {
+    await page.goto(`./#/play/${SQUARE}/${mode}/easy`);
+    await page.waitForSelector('g.piece');
+    const box = (await page.locator(`svg.${mode}`).boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(24);
+    expect(w - (box.x + box.width)).toBeGreaterThanOrEqual(24);
+  }
+});

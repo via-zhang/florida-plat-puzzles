@@ -5,7 +5,7 @@
   import { BLANK } from '../lib/analysis';
   import { createRng } from '../lib/engine/rng';
   import * as S from '../lib/engine/survey';
-  import { createMover, grabbedAt, liftOffset, offsetFor, startLift, type Lift, type Pt } from '../lib/lift';
+  import { createMover, grabbedAt, offsetFor, startLift, type Lift, type Pt } from '../lib/lift';
   import { svgPoint } from '../lib/panzoom';
   import type { LoadedPuzzle } from '../lib/puzzle';
   import { click, tick } from '../lib/sound';
@@ -62,7 +62,7 @@
   let settling = false;
   let layer = $state<HTMLDivElement>();
   let layerInner = $state<HTMLDivElement>();
-  const mover = createMover(() => svg, () => layer, () => layerInner);
+  const mover = createMover(() => layer, () => layerInner);
   const home = (p: S.SurveyPiece) => ({ x: p.bbox[0], y: p.bbox[1] });
   const onBoard = (pt: Pt) => pt.x >= 0 && pt.y >= 0 && pt.x <= B && pt.y <= B;
   const inTray = (pt: Pt) => {
@@ -85,7 +85,8 @@
     const local = { x: h.x + (pt.x - h.x - p.dx) / k, y: h.y + (pt.y - h.y - p.dy) / k };
     liftFrom = { dx: p.dx, dy: p.dy, small: p.small };
     game = S.raise(game, id);
-    lift = startLift(svg, wrap, e, id, local, k);
+    const bounds = { x: p.bbox[0], y: p.bbox[1], width: p.bbox[2] - p.bbox[0], height: p.bbox[3] - p.bbox[1] };
+    lift = startLift(svg, wrap, e, id, local, k, bounds);
     let scale = k;
     mover.begin(lift, (at) => {
       scale = scaleAt(at, scale);
@@ -109,7 +110,7 @@
   function release(e: PointerEvent) {
     if (!lift || settling || !liftFrom) return;
     const l = lift, id = l.id, from = liftFrom;
-    const pt = svgPoint(svg, e.clientX, e.clientY);
+    const pt = l.toBoard(e.clientX, e.clientY);
     const k = scaleAt(pt, mover.end());
     const h = home(game.pieces[id]);
     game = { ...game, pieces: game.pieces.map((q) => (q.id === id ? { ...q, ...offsetFor(l, h, pt, k), small: k !== 1 } : q)) };
@@ -117,7 +118,7 @@
     hoverSlot = null;
     const q = game.pieces[id], kf = q.small ? game.trayScale : 1;
     settling = true;
-    mover.settle(grabbedAt(l, h, q.dx, q.dy, kf), kf, finishSettle);
+    mover.settle(svg, grabbedAt(l, h, q.dx, q.dy, kf), kf, finishSettle);
   }
   function finishSettle() {
     settling = false;
@@ -219,23 +220,20 @@
   </svg>
   {#if lift}
     {@const p = game.pieces[lift.id]}
-    {@const o = liftOffset(lift)}
     <div class="lift" bind:this={layer} aria-hidden="true"
          style:left="{lift.box.left}px" style:top="{lift.box.top}px" style:width="{lift.box.width}px" style:height="{lift.box.height}px">
       <div class="lift-inner" bind:this={layerInner}
            style:transform-origin="{lift.origin.x}px {lift.origin.y}px" style:transform="scale({lift.scale})">
-        <svg viewBox={lift.viewBox} preserveAspectRatio="xMidYMid meet">
-          <g transform="translate({o.x} {o.y})">
-            <path d={p.path} fill="url(#{uid}-paper)" />
-            <path d={p.path} fill="url(#{uid}-img{srcs.indexOf(srcOf(lift.id))})" class="face" />
-          </g>
+        <svg viewBox={lift.viewBox}>
+          <path d={p.path} fill="url(#{uid}-paper)" />
+          <path d={p.path} fill="url(#{uid}-img{srcs.indexOf(srcOf(lift.id))})" class="face" />
         </svg>
       </div>
     </div>
     <!-- Outline of the place the piece will drop into, drawn above the dragged piece. -->
     {#if hoverSlot !== null}
-      <svg class="target-layer" aria-hidden="true" viewBox={lift.viewBox} preserveAspectRatio="xMidYMid meet"
-           style:left="{lift.box.left}px" style:top="{lift.box.top}px" style:width="{lift.box.width}px" style:height="{lift.box.height}px">
+      <svg class="target-layer" aria-hidden="true" viewBox={lift.frameViewBox} preserveAspectRatio="xMidYMid meet"
+           style:left="{lift.frame.left}px" style:top="{lift.frame.top}px" style:width="{lift.frame.width}px" style:height="{lift.frame.height}px">
         <path class="target" d={data[hoverSlot].path} />
       </svg>
     {/if}
@@ -251,10 +249,10 @@
   .tray { fill: var(--surface-2); stroke: var(--line); stroke-width: 2; stroke-dasharray: 10 8; }
   .piece { cursor: grab; outline: none; }
   .piece.lifted { opacity: 0; }
-  .lift { position: absolute; z-index: 1; pointer-events: none; will-change: transform; }
+  .lift { position: absolute; z-index: 2; pointer-events: none; will-change: transform; }
   .lift-inner { width: 100%; height: 100%; will-change: transform; transition: transform 0.18s ease-out; filter: drop-shadow(2px 4px 4px rgb(0 0 0 / 0.4)); }
   .lift svg { display: block; width: 100%; height: 100%; overflow: visible; }
-  .target-layer { position: absolute; z-index: 2; pointer-events: none; overflow: visible; }
+  .target-layer { position: absolute; z-index: 3; pointer-events: none; overflow: visible; }
   .piece.locked, .solved .piece { cursor: default; }
   .face { stroke: rgb(40 28 16 / 0.55); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
   .locked .face, .placed .face { stroke: rgb(40 28 16 / 0.18); }

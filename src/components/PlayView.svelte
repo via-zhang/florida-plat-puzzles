@@ -261,7 +261,9 @@
     .ref-body :global(.cmp-wrap) { width: min(100%, 520px); }
     .stage { container-type: inline-size; flex: none; }
     .board-box { width: 100%; }
-    .stage.jigsaw .board-box { height: max(520px, 78dvh); }
+    /* Fixed size (small viewport height, so it doesn't change as the address bar moves),
+       shaped like the board plus tray, with page margins on both sides for scrolling. */
+    .stage.jigsaw .board-box { width: min(calc(100% - 40px), calc(76svh * 1000 / 1870)); height: auto; aspect-ratio: 1000 / 1870; margin-inline: auto; }
     .win-grid { grid-template-columns: 1fr; }
     .where { display: grid; grid-template-columns: 110px 1fr; gap: 0.75rem; align-items: center; }
     .where p { margin: 0; }
