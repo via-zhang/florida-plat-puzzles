@@ -257,7 +257,8 @@
     .group :global(.choice) { flex: 1 1 260px; }
     .next { flex-direction: row; flex-wrap: wrap; }
     .next .btn { flex: 1; }
-    .ref-body img { max-width: 220px; margin: 0 auto; }
+    .ref-body img { width: 100%; max-width: 520px; max-height: none; margin: 0 auto; }
+    .ref-body :global(.cmp-wrap) { width: min(100%, 520px); }
     .stage { container-type: inline-size; flex: none; }
     .board-box { width: 100%; }
     .stage.jigsaw .board-box { height: max(520px, 78dvh); }

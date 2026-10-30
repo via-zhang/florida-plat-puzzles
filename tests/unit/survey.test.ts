@@ -78,6 +78,19 @@ describe('survey', () => {
     expect(r.state.pieces[1].small).toBe(true);
   });
 
+  it('drops a tray-size piece where it is drawn, and never snaps it home from the tray', () => {
+    const s0 = fresh();
+    const p = s0.pieces[0];
+    const c0 = S.visualCenter(s0, p);
+    const s = S.setOffset(s0, 0, p.dx + 10, p.dy - 15);
+    const r = S.drop(s, 0, { dx: p.dx, dy: p.dy, small: true }, tray, { x: c0.x + 10, y: c0.y - 15 });
+    expect(r.result).toBe('loose');
+    expect(r.state.pieces[0]).toMatchObject({ small: true, placed: false });
+    const c = S.visualCenter(r.state, r.state.pieces[0]);
+    expect(c.x).toBeCloseTo(c0.x + 10);
+    expect(c.y).toBeCloseTo(c0.y - 15);
+  });
+
   it('is solved when every piece is home', () => {
     let s = fresh([0]);
     for (const p of s.pieces.filter((q) => !q.locked)) {

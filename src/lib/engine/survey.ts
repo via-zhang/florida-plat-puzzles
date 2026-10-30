@@ -152,7 +152,7 @@ export function snapDistance(p: SurveyPieceData) {
 export type DropResult = 'placed' | 'wrong' | 'loose' | 'toTray';
 
 /**
- * Drop a (full-size) piece.
+ * Drop a piece (full size or tray size).
  *  - Near its own place on the board: it clicks in.
  *  - Elsewhere on the board: it goes back to the tray (each piece has exactly one place).
  *  - In the tray: it stays where it was let go (kept inside the tray).
@@ -166,12 +166,13 @@ export function drop(
 ): { state: SurveyState; result: DropResult } {
   const p = s.pieces[id];
   const moves = s.moves + 1;
-  const anchor = { x: p.point[0] + p.dx, y: p.point[1] + p.dy };
+  const k0 = p.small ? s.trayScale : 1;
+  const anchor = { x: p.bbox[0] + p.dx + k0 * (p.point[0] - p.bbox[0]), y: p.bbox[1] + p.dy + k0 * (p.point[1] - p.bbox[1]) };
   const c = visualCenter(s, p);
   const set = (q: Partial<SurveyPiece>) => s.pieces.map((x) => (x.id === id ? { ...x, ...q } : x));
 
   // Clicks in when dropped over its own outlined place, or simply close to home.
-  if (targetSlot === id || (Math.hypot(p.dx, p.dy) <= snapDistance(p) && anchor.x >= 0 && anchor.x <= BOARD && anchor.y >= 0 && anchor.y <= BOARD)) {
+  if (targetSlot === id || (!p.small && Math.hypot(p.dx, p.dy) <= snapDistance(p) && anchor.x >= 0 && anchor.x <= BOARD && anchor.y >= 0 && anchor.y <= BOARD)) {
     return { state: { ...s, pieces: set({ dx: 0, dy: 0, small: false, placed: true }), moves }, result: 'placed' };
   }
   // Where it was let go: the pointer if there is one (what the player sees), else the

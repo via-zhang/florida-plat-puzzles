@@ -416,3 +416,13 @@ test('about dialog shows the credit', async ({ page }) => {
   await expect(glo).toHaveAttribute('href', 'https://www.labins.org/survey_data/landrecords/landrecords.cfm');
   await expect(page.getByRole('dialog')).toContainText('AI for Human Ecology Lab');
 });
+
+test('phone: reference image spans the panel width', async ({ page }) => {
+  const w = page.viewportSize()!.width;
+  test.skip(w > 760, 'phone layout only');
+  await page.goto(`./#/play/${SQUARE}/rotate/easy`);
+  await waitForBoard(page);
+  await page.getByRole('button', { name: 'Reference Image' }).click();
+  const box = (await page.locator('.ref-body img, .ref-body .cmp-wrap').first().boundingBox())!;
+  expect(box.width).toBeGreaterThan(Math.min(w - 60, 480));
+});

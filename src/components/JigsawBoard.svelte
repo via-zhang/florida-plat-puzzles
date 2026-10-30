@@ -4,6 +4,7 @@
   import { jigsawTabs, type Difficulty } from '../lib/engine/difficulty';
   import * as J from '../lib/engine/jigsaw';
   import { createRng } from '../lib/engine/rng';
+  import { createMover, grabbedAt, liftOffset, offsetFor, startLift, type Lift, type Pt } from '../lib/lift';
   import { svgPoint } from '../lib/panzoom';
   import { blankCells, type LoadedPuzzle } from '../lib/puzzle';
   import { click, tick } from '../lib/sound';
@@ -59,8 +60,22 @@
     game = J.arrangeTray(game, trayRect(land), byPos);
   }
 
-  // Dragging
-  let drag = $state<{ id: number; px: number; py: number; dx: number; dy: number; from: J.From } | null>(null);
+  // Dragging: the piece moves in its own layer (see lib/lift.ts).
+  let lift = $state<Lift | null>(null);
+  let liftFrom: J.From | null = null;
+  let settling = false;
+  let hoverCell = $state<number | null>(null);
+  let layer = $state<HTMLDivElement>();
+  let layerInner = $state<HTMLDivElement>();
+  const mover = createMover(() => svg, () => layer, () => layerInner);
+  const home = (p: J.Piece) => ({ x: p.col * cell, y: p.row * cell });
+  const onBoard = (pt: Pt) => pt.x >= 0 && pt.y >= 0 && pt.x <= B && pt.y <= B;
+  const inTray = (pt: Pt) => {
+    const t = trayRect(landscape);
+    return pt.x >= t.x && pt.y >= t.y && pt.x <= t.x + t.w && pt.y <= t.y + t.h;
+  };
+  /** Full size over the board, tray size over the tray, unchanged elsewhere. */
+  const scaleAt = (pt: Pt, k: number) => (onBoard(pt) ? 1 : inTray(pt) ? game.trayScale : k);
 
   function grab(id: number, e: PointerEvent) {
     const p = game.pieces[id];
@@ -68,38 +83,44 @@
     if (p.locked) { notify("This piece is missing from the historical map, so it's fixed in place."); return; }
     e.stopPropagation();
     e.preventDefault(); // no focus-scroll or text selection mid-drag
-    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    settling = false;
+    svg.setPointerCapture(e.pointerId);
     const pt = svgPoint(svg, e.clientX, e.clientY);
-    const from = { dx: p.dx, dy: p.dy, small: p.small };
-    // Tray pieces grow to full size when picked up, centered under the pointer.
-    game = J.raise(J.toFull(game, id), id);
-    if (p.small) {
-      // Grow around the pointer: the spot you grabbed stays under your finger.
-      const k = game.trayScale, hx = p.col * cell, hy = p.row * cell;
-      const local = { x: hx + (pt.x - hx - p.dx) / k, y: hy + (pt.y - hy - p.dy) / k };
-      game = J.setOffset(game, id, pt.x - local.x, pt.y - local.y);
-    }
-    const r = game.pieces[id];
-    drag = { id, px: pt.x, py: pt.y, dx: r.dx, dy: r.dy, from };
+    const k = p.small ? game.trayScale : 1, h = home(p);
+    const local = { x: h.x + (pt.x - h.x - p.dx) / k, y: h.y + (pt.y - h.y - p.dy) / k };
+    liftFrom = { dx: p.dx, dy: p.dy, small: p.small };
+    game = J.raise(game, id);
+    lift = startLift(svg, wrap, e, id, local, k);
+    let scale = k;
+    mover.begin(lift, (at) => {
+      scale = scaleAt(at, scale);
+      const c = { x: at.x - lift!.local.x + h.x + cell / 2, y: at.y - lift!.local.y + h.y + cell / 2 };
+      const next = scale === 1 ? J.cellAt(n, c.x, c.y) : null;
+      if (next !== hoverCell) hoverCell = next;
+      return scale;
+    });
   }
   function moveDrag(e: PointerEvent) {
-    if (!drag) return;
+    if (lift && !settling) mover.move(e);
+  }
+  function release(e: PointerEvent) {
+    if (!lift || settling || !liftFrom) return;
+    const l = lift, id = l.id, from = liftFrom;
     const pt = svgPoint(svg, e.clientX, e.clientY);
-    game = J.setOffset(game, drag.id, drag.dx + pt.x - drag.px, drag.dy + pt.y - drag.py);
-  }
-  function release() {
-    if (!drag) return;
-    const { id, from } = drag;
-    drag = null;
+    const k = scaleAt(pt, mover.end());
+    const p = game.pieces[id], h = home(p);
+    game = { ...game, pieces: game.pieces.map((q) => (q.id === id ? { ...q, ...offsetFor(l, h, pt, k), small: k !== 1 } : q)) };
+    hoverCell = null;
     place(id, from);
+    const q = game.pieces[id], kf = q.small ? game.trayScale : 1;
+    settling = true;
+    mover.settle(grabbedAt(l, h, q.dx, q.dy, kf), kf, finishSettle);
   }
-
-  /** Cell the dragged piece would click into (for the highlight). */
-  const hoverCell = $derived.by(() => {
-    if (!drag) return null;
-    const p = game.pieces[drag.id];
-    return J.cellAt(n, p.col * cell + p.dx + cell / 2, p.row * cell + p.dy + cell / 2);
-  });
+  function finishSettle() {
+    settling = false;
+    lift = null;
+    liftFrom = null;
+  }
 
   function place(id: number, from: J.From) {
     const { state: next, result } = J.drop(game, id, from, trayRect(landscape));
@@ -153,9 +174,6 @@
       <pattern id="{uid}-paper" patternUnits="userSpaceOnUse" width="200" height="200">
         <image href={paperSrc} width="200" height="200" />
       </pattern>
-      <filter id="{uid}-lift" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="3" dy="5" stdDeviation="4" flood-opacity="0.45" />
-      </filter>
     </defs>
 
     <rect class="board-bg" x="0" y="0" width={B} height={B} />
@@ -182,7 +200,7 @@
         class="piece"
         class:placed={p.placed}
         class:locked={p.locked}
-        class:dragging={drag?.id === id}
+        class:lifted={lift?.id === id}
         transform={p.small
           ? `translate(${p.col * cell + p.dx} ${p.row * cell + p.dy}) scale(${game.trayScale}) translate(${-p.col * cell} ${-p.row * cell})`
           : `translate(${p.dx} ${p.dy})`}
@@ -191,24 +209,43 @@
         aria-label={p.locked ? `Piece ${id + 1}, blank, fixed in place` : `Piece ${id + 1}. Arrow keys move it a square at a time, Enter clicks it in.`}
         onpointerdown={(e) => grab(id, e)}
         onkeydown={(e) => key(id, e)}
-        filter={drag?.id === id ? `url(#${uid}-lift)` : undefined}
       >
         <path d={p.path} fill="url(#{uid}-paper)" />
         <path d={p.path} fill="url(#{uid}-img{srcs.indexOf(srcOf(id))})" class="face" />
       </g>
     {/each}
   </svg>
+  {#if lift}
+    {@const p = game.pieces[lift.id]}
+    {@const o = liftOffset(lift)}
+    <div class="lift" bind:this={layer} aria-hidden="true"
+         style:left="{lift.box.left}px" style:top="{lift.box.top}px" style:width="{lift.box.width}px" style:height="{lift.box.height}px">
+      <div class="lift-inner" bind:this={layerInner}
+           style:transform-origin="{lift.origin.x}px {lift.origin.y}px"
+           style:transform="scale({lift.scale})">
+        <svg viewBox={lift.viewBox} preserveAspectRatio="xMidYMid meet">
+          <g transform="translate({o.x} {o.y})">
+            <path d={p.path} fill="url(#{uid}-paper)" />
+            <path d={p.path} fill="url(#{uid}-img{srcs.indexOf(srcOf(lift.id))})" class="face" />
+          </g>
+        </svg>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
-  .wrap { display: flex; flex-direction: column; gap: 6px; width: 100%; height: 100%; min-height: 0; }
+  .wrap { position: relative; overflow: clip; display: flex; flex-direction: column; gap: 6px; width: 100%; height: 100%; min-height: 0; }
   .jigsaw { display: block; flex: 1; min-height: 0; width: 100%; touch-action: none; user-select: none; }
   .board-bg { fill: var(--slot); stroke: var(--board-edge); stroke-width: 4; }
   .slots line { stroke: rgb(255 245 225 / 0.12); stroke-width: 1.5; stroke-dasharray: 6 6; vector-effect: non-scaling-stroke; }
   .target { fill: rgb(255 240 200 / 0.14); stroke: var(--accent); stroke-width: 3; vector-effect: non-scaling-stroke; }
   .tray { fill: var(--surface-2); stroke: var(--line); stroke-width: 2; stroke-dasharray: 10 8; }
   .piece { cursor: grab; outline: none; }
-  .piece.dragging { cursor: grabbing; }
+  .piece.lifted { opacity: 0; }
+  .lift { position: absolute; z-index: 1; pointer-events: none; will-change: transform; }
+  .lift-inner { width: 100%; height: 100%; will-change: transform; transition: transform 0.18s ease-out; filter: drop-shadow(2px 4px 4px rgb(0 0 0 / 0.4)); }
+  .lift svg { display: block; width: 100%; height: 100%; overflow: visible; }
   .piece.locked, .solved .piece { cursor: default; }
   .face { stroke: rgb(40 28 16 / 0.55); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
   .locked .face { stroke: rgb(40 28 16 / 0.18); }

@@ -164,6 +164,20 @@ describe('jigsaw', () => {
     expect(c.y).toBeLessThanOrEqual(tray.y + tray.h - half + 0.001);
   });
 
+  it('drops a tray-size piece where it is drawn, without growing it first', () => {
+    const s0 = fresh();
+    const p = s0.pieces[0];
+    const c0 = J.visualCenter(s0, p);
+    // Nudge it within the tray, still at tray size.
+    const s = J.setOffset(s0, 0, p.dx + 20, p.dy + 30);
+    const r = J.drop(s, 0, { dx: p.dx, dy: p.dy, small: true }, tray);
+    expect(r.result).toBe('loose');
+    expect(r.state.pieces[0].small).toBe(true);
+    const c = J.visualCenter(r.state, r.state.pieces[0]);
+    expect(c.x).toBeCloseTo(c0.x + 20);
+    expect(c.y).toBeCloseTo(c0.y + 30);
+  });
+
   it('is solved when every piece is in its own cell', () => {
     const rng = createRng(4);
     let s = J.create(2, J.buildPaths(2, rng, false), new Set(), tray, rng);

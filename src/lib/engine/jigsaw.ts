@@ -230,7 +230,7 @@ export function freeTraySpot(s: JigsawState, id: number, tray: Rect) {
 export type DropResult = 'placed' | 'slotted' | 'swapped' | 'returned' | 'loose' | 'toTray';
 
 /**
- * Drop a piece whose drag started at offset `from`.
+ * Drop a piece (full size or tray size) whose drag started at offset `from`.
  * Pieces "click" into board cells: dropped over the board, a piece snaps into the
  * cell under its center, whether or not it's the right one. Nothing locks: pieces
  * can be picked up again until the whole puzzle is solved. A piece already in that
@@ -240,27 +240,28 @@ export type DropResult = 'placed' | 'slotted' | 'swapped' | 'returned' | 'loose'
 export function drop(s: JigsawState, id: number, from: From, tray: Rect): { state: JigsawState; result: DropResult } {
   const cell = BOARD / s.n;
   const p = s.pieces[id];
-  const target = cellAt(s.n, p.col * cell + p.dx + cell / 2, p.row * cell + p.dy + cell / 2);
+  const center = visualCenter(s, p);
+  const target = cellAt(s.n, center.x, center.y);
   const moves = s.moves + 1;
   if (target === null) {
     // Off the board. Inside the tray it stays where it was let go (shrunk, kept fully
     // inside the tray); anywhere else it goes back to the tray: to the spot it came
     // from if it came from the tray, otherwise to a free tray spot.
-    const c = visualCenter(s, p);
+    const c = center;
     const k = s.trayScale, half = (k * cell) / 2;
     const inTray = c.x >= tray.x && c.x <= tray.x + tray.w && c.y >= tray.y && c.y <= tray.y + tray.h;
-    let center: { x: number; y: number };
+    let spot: { x: number; y: number };
     if (inTray) {
-      center = {
+      spot = {
         x: Math.min(Math.max(c.x, tray.x + half), tray.x + tray.w - half),
         y: Math.min(Math.max(c.y, tray.y + half), tray.y + tray.h - half),
       };
     } else if (from.small) {
-      center = visualCenter(s, { ...p, ...from });
+      spot = visualCenter(s, { ...p, ...from });
     } else {
-      center = freeTraySpot(s, id, tray);
+      spot = freeTraySpot(s, id, tray);
     }
-    const o = offsetForCenter(s, p, center, true);
+    const o = offsetForCenter(s, p, spot, true);
     const pieces = s.pieces.map((q) => (q.id === id ? { ...q, ...o, small: true, placed: false } : q));
     return { state: { ...s, pieces, moves }, result: inTray ? 'loose' : 'toTray' };
   }
