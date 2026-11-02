@@ -38,11 +38,29 @@
     loadPuzzle(manifest, sq).then((p) => { if (sq === square) puzzle = p; }).catch((e) => (error = String(e)));
   });
 
+  let solved = false;
   function restart() {
     seed = randomSeed();
     moves = 0;
     placed = null;
     won = false;
+    solved = false;
+  }
+
+  // Ask before throwing away a puzzle that's been started but not solved.
+  let confirmOpen = $state(false);
+  let ask = $state<{ title: string; text: string; action: string; run: () => void } | null>(null);
+  function confirmFirst(title: string, text: string, action: string, run: () => void) {
+    if (moves === 0 || solved) { run(); return; }
+    ask = { title, text, action, run };
+    confirmOpen = true;
+  }
+  const askRestart = () => confirmFirst('Restart this puzzle?', 'The pieces will be reshuffled and your moves reset.', 'Restart', restart);
+  const askNew = () => confirmFirst('Skip to a new puzzle?', "You'll lose your progress on this one.", 'New puzzle', onRandom);
+  const askMap = () => confirmFirst('Leave this puzzle?', "You'll lose your progress on this one.", 'Choose on map', onMap);
+  function confirmed() {
+    confirmOpen = false;
+    ask?.run();
   }
 
   // Restart whenever the square, mode or difficulty changes.
@@ -60,6 +78,7 @@
     nextMode = mode;
     nextDifficulty = difficulty;
     won = true;
+    solved = true;
     chime();
   };
   const applyNext = () => {
@@ -92,7 +111,7 @@
   const diffLabel = $derived(DIFFICULTIES.find((d) => d.id === difficulty)!.label);
 </script>
 
-<SidePanel bind:soundOn onHome={onMap} {onAbout} credit={manifest.present?.attribution}>
+<SidePanel bind:soundOn onHome={askMap} {onAbout} credit={manifest.present?.attribution}>
   {#snippet side()}
     <div class="title">
       <h1>{formatCoords(square)}</h1>
@@ -114,7 +133,7 @@
         <span><strong>{moves}</strong> {moves === 1 ? 'move' : 'moves'}</span>
         {#if placed}<span><strong>{placed[0]}</strong>/{placed[1]} placed</span>{/if}
       </div>
-      <button class="btn" onclick={restart} title="Reshuffle this puzzle">Restart</button>
+      <button class="btn" onclick={askRestart} title="Reshuffle this puzzle">Restart</button>
     </div>
 
     <div class="ref">
@@ -135,8 +154,8 @@
     </div>
 
     <nav class="next" aria-label="Next puzzle">
-      <button class="btn primary" onclick={onRandom} title="Random place, same settings">New puzzle</button>
-      <button class="btn" onclick={onMap} title="Pick a place, same settings">Choose on map</button>
+      <button class="btn primary" onclick={askNew} title="Random place, same settings">New puzzle</button>
+      <button class="btn" onclick={askMap} title="Pick a place, same settings">Choose on map</button>
     </nav>
   {/snippet}
 
@@ -171,6 +190,19 @@
     {/if}
   </section>
 </SidePanel>
+
+<Dialog bind:open={confirmOpen} label={ask?.title ?? 'Confirm'}>
+  {#if ask}
+    <div class="confirm">
+      <h2>{ask.title}</h2>
+      <p>{ask.text}</p>
+      <div class="confirm-actions">
+        <button class="btn" onclick={() => (confirmOpen = false)}>Keep playing</button>
+        <button class="btn primary" onclick={confirmed}>{ask.action}</button>
+      </div>
+    </div>
+  {/if}
+</Dialog>
 
 <Dialog bind:open={won} label="Puzzle solved" wide>
   <div class="win">
@@ -249,6 +281,10 @@
   .where strong { color: var(--ink); }
   .win-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 1rem; }
   .win-settings p { margin: 0; width: 100%; color: var(--muted); font-size: 0.9rem; }
+  .confirm h2 { font-size: 1.3rem; }
+  .confirm p { margin: 0.5rem 0 0; color: var(--muted); }
+  .confirm-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.25rem; justify-content: flex-end; }
+  .confirm-actions .btn { flex: 1 1 140px; }
   .win-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; justify-content: flex-end; }
 
   @media (max-width: 760px) {

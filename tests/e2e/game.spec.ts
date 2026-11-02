@@ -462,3 +462,44 @@ test('phone: the puzzle leaves page margins on both sides for scrolling', async 
     expect(w - (box.x + box.width)).toBeGreaterThanOrEqual(24);
   }
 });
+
+test('restart, new puzzle and choose on map ask first once the puzzle is started', async ({ page }) => {
+  await page.goto(`./#/play/${SQUARE}/rotate/medium`);
+  await waitForBoard(page);
+  const url = page.url();
+  // Nothing played yet: Restart just reshuffles, no question.
+  await page.getByRole('button', { name: 'Restart' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await page.locator('.board .tile:not(.locked)').first().click();
+  await expect(page.locator('.stats strong').first()).toHaveText('1');
+
+  // Restart: "Keep playing" leaves the puzzle as it was.
+  await page.getByRole('button', { name: 'Restart' }).click();
+  const ask = page.getByRole('dialog', { name: 'Restart this puzzle?' });
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Keep playing' }).click();
+  await expect(ask).toBeHidden();
+  await expect(page.locator('.stats strong').first()).toHaveText('1');
+
+  // New puzzle and Choose on map: cancel stays put.
+  await page.getByRole('button', { name: 'New puzzle' }).click();
+  const skip = page.getByRole('dialog', { name: 'Skip to a new puzzle?' });
+  await expect(skip).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(skip).toBeHidden();
+  await page.getByRole('button', { name: 'Choose on map' }).click();
+  await page.getByRole('dialog', { name: 'Leave this puzzle?' }).getByRole('button', { name: 'Keep playing' }).click();
+  expect(page.url()).toBe(url);
+
+  // Confirming restarts.
+  await page.getByRole('button', { name: 'Restart' }).click();
+  await ask.getByRole('button', { name: 'Restart' }).click();
+  await expect(page.locator('.stats strong').first()).toHaveText('0');
+
+  // Confirming New puzzle moves on.
+  await page.locator('.board .tile:not(.locked)').first().click();
+  await page.getByRole('button', { name: 'New puzzle' }).click();
+  await skip.getByRole('button', { name: 'New puzzle' }).click();
+  await expect(page).not.toHaveURL(url);
+});
