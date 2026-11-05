@@ -220,7 +220,8 @@
     {#if hoverCell !== null}
       <svg class="target-layer" aria-hidden="true" viewBox={lift.frameViewBox} preserveAspectRatio="xMidYMid meet"
            style:left="{lift.frame.left}px" style:top="{lift.frame.top}px" style:width="{lift.frame.width}px" style:height="{lift.frame.height}px">
-        <rect class="target" x={(hoverCell % n) * cell} y={Math.floor(hoverCell / n) * cell} width={cell} height={cell} />
+        <!-- The dragged piece's own outline, at the square it would drop into. -->
+        <path class="target" d={p.path} transform="translate({(hoverCell % n - p.col) * cell} {(Math.floor(hoverCell / n) - p.row) * cell})" />
       </svg>
     {/if}
     <div class="lift" bind:this={layer} aria-hidden="true"

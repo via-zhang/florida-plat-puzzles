@@ -13,7 +13,7 @@
   } = $props();
 
   const cells = puzzle.cells(n);
-  let game = $state(R.create(n, cells.map((c) => c.looksRightAt), createRng(seed)));
+  let game = $state(R.create(n, cells.map((c) => c.looksRightAt), cells.map((c) => c.missing >= BLANK), createRng(seed)));
   // Cumulative angles so animation always turns the short way.
   let angle = $state(game.rot.map((r) => r * 90));
   let solved = $state(false);
@@ -24,9 +24,7 @@
   function turn(i: number, dir: 1 | -1) {
     if (solved) return;
     if (game.locked[i]) {
-      notify(cells[i].missing >= BLANK
-        ? "This tile is missing from the historical map, so it's fixed in place."
-        : "On the historical map this tile looks the same at every angle, so it's fixed in place.");
+      notify("This tile is missing from the historical map, so it's fixed in place.");
       return;
     }
     game = R.rotate(game, i, dir);

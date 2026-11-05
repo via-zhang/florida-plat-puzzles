@@ -2,9 +2,9 @@ import { type Rng, randInt } from './rng';
 
 /**
  * Rotate puzzle. rot[i] is the tile's quarter-turns clockwise (0..3).
- * accepted[i] lists the rotations that look correct for tile i (always includes 0;
- * a symmetric or blank tile may look right at other angles too).
- * Tiles that look the same at every angle are locked upright.
+ * accepted[i] lists the rotations that count as correct for tile i (always includes 0;
+ * a symmetric tile may look right at other angles too).
+ * Fixed tiles (blank paper) stay upright; every other tile starts turned.
  */
 export interface RotateState {
   n: number;
@@ -14,18 +14,20 @@ export interface RotateState {
   moves: number;
 }
 
-export function create(n: number, accepted: number[][], rng: Rng): RotateState {
+export function create(n: number, accepted: number[][], fixed: boolean[], rng: Rng): RotateState {
   const rot: number[] = [];
   const locked: boolean[] = [];
   for (let i = 0; i < n * n; i++) {
     const ok = accepted[i] ?? [0];
-    const isLocked = [0, 1, 2, 3].every((r) => ok.includes(r));
+    const isLocked = !!fixed[i];
     locked.push(isLocked);
     if (isLocked) {
       rot.push(0);
     } else {
+      // Start at an angle that isn't accepted; if every angle is, any turned angle.
       const wrong = [1, 2, 3].filter((r) => !ok.includes(r));
-      rot.push(wrong[randInt(rng, wrong.length)]);
+      const choices = wrong.length ? wrong : [1, 2, 3];
+      rot.push(choices[randInt(rng, choices.length)]);
     }
   }
   return { n, rot, accepted: accepted.map((a) => a ?? [0]), locked, moves: 0 };
